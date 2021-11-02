@@ -32,7 +32,8 @@ def getAllFiles(path: str, extension = None) -> str:
                 response += files + '\r\n'
         return response            
     else:
-        raise Exception('the desired directory does not exist')
+        response = 'HTTP/1.1 404 error \r\n the desired directory does not exist.'
+        return response 
 
 def handle_client(conn, addr):
     print ('New client from', addr)
@@ -49,7 +50,9 @@ def handle_client(conn, addr):
         # ensures that the files accessed are inside the directory
         # 
         body = formatBody(data)
-        print(method, fileName, fileExtenstion, body)
+        if args.VERBOSE:
+            print("------------------------------------------------------------------------------------------------")
+            print(f"method: {method}, fileName: {fileName}, fileExtenstion: {fileExtenstion}, body: {body}, path: {args.DIRECTORY}")
         response = "hi"
         try:
             if method == 'GET':
@@ -60,10 +63,14 @@ def handle_client(conn, addr):
                         response = getAllFiles(args.DIRECTORY, fileExtenstion)
                         if args.VERBOSE:
                             print("list of files that have the same file extensions as specified inside the given directory")
-                    else:
+                    elif os.path.isdir(args.DIRECTORY):
                         response = getAllFiles(args.DIRECTORY)        
                         if args.VERBOSE:
-                            print("list of files inside the given directory")           
+                            print("list of files inside the given directory")    
+                    else:
+                        if args.VERBOSE:
+                            print("directory does not exist")
+                        response = "HTTP/1.1 404 error \r\n Directory does not exist"       
                 elif os.path.isdir(args.DIRECTORY):
                     pathToFile = args.DIRECTORY + fileName
                     if os.path.isfile(pathToFile):
@@ -72,28 +79,37 @@ def handle_client(conn, addr):
                         with open(pathToFile, 'r') as f:
                             response = f.read()
                     else:
-                        response = "404 file does not exist in directory."
-            else:
-                response = "how am I here"        
-            # elif method == "POST":
-            # TODO POST request
-
-        except OSError:
-            print("error")
+                        if args.VERBOSE:
+                            print("File does not exist in directory")
+                        response = "HTTP/1.1 404 error \r\n File does not exist in directory."        
+            elif method == "POST":
+                if body is None:
+                    if args.VERBOSE:
+                        print("body is empty, request failed")
+                    response = 'HTTP/1.1 400 error \r\n body is empty'
+                elif os.path.isdir(args.DIRECTORY): #not writing outside directory where code is
+                    pathToWrite = args.DIRECTORY + fileName
+                    with open(pathToWrite, 'w') as f:
+                        f.write(body)
+                    if args.VERBOSE:
+                        print(f"write contents of body to {pathToWrite}")
+                    response = 'HTTP/1.1 200 OK \r\n'
+                else:
+                    response = 'HTTP/1.1 404 error \r\n directory not found'
         finally:
             conn.sendall(response.encode())
+            print(response)
+            #responses not appearing in client
     finally:
         conn.close()
 
 def attempt1():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    port = 8080
     try:
-        sock.bind(('', port))
+        sock.bind(('', args.PORT))
         sock.listen(5) #queue 
-        print(f"Server listening at port {port}")
-    # parser = argparse.ArgumentParser(prog="httpfs")
+        print(f"Server listening at port {args.PORT}")
         while True:
             clientsocket, address = sock.accept()
             print(f"Connection from {clientsocket} {address} has been established.")
