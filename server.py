@@ -4,6 +4,21 @@ from datetime import datetime
 
 # def formatRequest(data:str)
 # b'GET / HTTP/1.1\r\nHost: localhost:8080\r\nUser-Agent: curl/7.55.1\r\nAccept: */*\r\nReferer: t\r\n\r\n'
+def formatResponse(status: int, error = None, data =None)->str:
+    # response = ''
+    if error:
+        return f"""HTTP/1.1 {str(status)} {error} \r\n 
+        Date: {datetime.now.strftime("%d/%m/%Y %H:%M:%S")} \r\n 
+        Content-Type: text/html; charset=utf-8 \r\n
+        Content-Length: {str(len(error.encode("utf-8")))} \r\n\r\n
+        {error}"""
+    elif data:
+        return f"""HTTP/1.1 {str(status)} OK \r\n 
+        Date: {datetime.now.strftime("%d/%m/%Y %H:%M:%S")} \r\n 
+        Content-Type: text/html; charset=utf-8 \r\n
+        Content-Length: {str(len(error.encode("utf-8")))} \r\n\r\n
+        {data}"""
+
 def formatRequest(data: str):
     dataGroups = re.search("(\w+)\s(\/\w*[\/\w]*(\.\w+\/?)*)", data) 
     acceptedExtenstions = re.search('(Accept:)\s(\W+)(\\r\\n)', data)
@@ -20,13 +35,12 @@ def formatBody(data: str):
 
 def getAllFiles(path: str) -> str:
     if os.path.isdir(path):
-        response = ''       
+        data = ''       
         for files in os.listdir(path):
-            response += files + '\r\n'
-        return response            
+            data += files + '\r\n'
+        return formatResponse(200, data= data)            
     else:
-        response = 'HTTP/1.1 404 error \r\n the desired directory does not exist.'
-        return response 
+        return formatResponse(404, error="The desired directory doees not exist") 
 
 def handle_client(conn, addr):
     print ('New client from', addr)
@@ -46,7 +60,6 @@ def handle_client(conn, addr):
         if args.VERBOSE:
             print("------------------------------------------------------------------------------------------------")
             print(f"method: {method}, fileName: {fileName}, fileExtenstion: {fileExtenstion}, body: {body}, path: {args.DIRECTORY}")
-        # response = "hi"
         try:
             if method == 'GET':
                 if args.VERBOSE:
@@ -58,36 +71,32 @@ def handle_client(conn, addr):
                     else:
                         if args.VERBOSE:
                             print("directory does not exist")
-                        response = "HTTP/1.1 404 error \r\n Directory does not exist"       
+                        response = formatResponse(404, error="Directory does not exist")     
                 elif os.path.isdir(args.DIRECTORY):
                     pathToFile = args.DIRECTORY + fileName
                     if os.path.isfile(pathToFile):
                         if args.VERBOSE:
                             print("output contents of the requested file")
                         with open(pathToFile, 'r') as f:
-                            response = f.read()
+                            response = formatResponse(200, data=f.read())
                     else:
                         if args.VERBOSE:
                             print("File does not exist in directory")
-                        # response = "HTTP/1.1 404 error \r\n File does not exist in directory."   
-                        response = ''.join(['HTTP/1.1 ', "404", ' ', "not found", '\r\n', 
-                        'Date: ', datetime.now().strftime("%Y-%m-%d %I:%M:%S %p"), '\r\n',
-                        'Content-Type: text/html; charset=utf-8\r\n','Content-Length: ', 
-                        str(len("error")), '\r\n\r\n',"hello"])     #create method to format request
+                        response = formatResponse(404, error="File does not exist in given directory")
             elif method == "POST":
                 if body is None:
                     if args.VERBOSE:
                         print("body is empty, request failed")
-                    response = 'HTTP/1.1 400 error \r\n body is empty'
+                    response = formatResponse(400, error="Body of request is empty")
                 elif os.path.isdir(args.DIRECTORY): #not writing outside directory where code is
                     pathToWrite = args.DIRECTORY + fileName
                     with open(pathToWrite, 'w') as f:
                         f.write(body)
                     if args.VERBOSE:
                         print(f"write contents of body to {pathToWrite}")
-                    response = 'HTTP/1.1 200 OK \r\n'
+                    response = formatResponse(200, data=body)
                 else:
-                    response = 'HTTP/1.1 404 error \r\n directory not found'
+                    response = formatResponse(403, error="Attempted to write outside given directory")
         finally:
             conn.sendall(response.encode())
             print(response)
