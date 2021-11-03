@@ -2,22 +2,21 @@ import socket, sys, os, threading, re, argParser
 from datetime import datetime
 
 
-# def formatRequest(data:str)
-# b'GET / HTTP/1.1\r\nHost: localhost:8080\r\nUser-Agent: curl/7.55.1\r\nAccept: */*\r\nReferer: t\r\n\r\n'
 def formatResponse(status: int, error = None, data =None)->str:
-    # response = ''
     if error:
         return f"""HTTP/1.1 {str(status)} {error} \r\n 
-        Date: {datetime.now.strftime("%d/%m/%Y %H:%M:%S")} \r\n 
+        Date: {datetime.now().strftime('%Y/%m/%d %H:%M:%S')} \r\n 
         Content-Type: text/html; charset=utf-8 \r\n
         Content-Length: {str(len(error.encode("utf-8")))} \r\n\r\n
         {error}"""
     elif data:
         return f"""HTTP/1.1 {str(status)} OK \r\n 
-        Date: {datetime.now.strftime("%d/%m/%Y %H:%M:%S")} \r\n 
+        Date: {datetime.now().strftime('%Y/%m/%d %H:%M:%S')} \r\n 
         Content-Type: text/html; charset=utf-8 \r\n
-        Content-Length: {str(len(error.encode("utf-8")))} \r\n\r\n
+        Content-Length: {str(len(data.encode("utf-8")))} \r\n\r\n
         {data}"""
+    else:
+        return "how?"
 
 def formatRequest(data: str):
     dataGroups = re.search("(\w+)\s(\/\w*[\/\w]*(\.\w+\/?)*)", data) 
@@ -40,13 +39,13 @@ def getAllFiles(path: str) -> str:
             data += files + '\r\n'
         return formatResponse(200, data= data)            
     else:
-        return formatResponse(404, error="The desired directory doees not exist") 
+        return formatResponse(404, error="The desired directory does not exist") 
 
 def handle_client(conn, addr):
     print ('New client from', addr)
     try:
         # while True:
-        dataBytes = conn.recv(1024)
+        dataBytes = conn.recv(1024) #what if bigger than 1024
             # if not data:
             #     break
             # print(data)
@@ -61,17 +60,15 @@ def handle_client(conn, addr):
             print("------------------------------------------------------------------------------------------------")
             print(f"method: {method}, fileName: {fileName}, fileExtenstion: {fileExtenstion}, body: {body}, path: {args.DIRECTORY}")
         try:
+            response = ''
             if method == 'GET':
                 if args.VERBOSE:
                     print("GET request")
+                print(fileName)
                 if fileName == '/' and os.path.isdir(args.DIRECTORY): 
                     response = getAllFiles(args.DIRECTORY)        
                     if args.VERBOSE:
-                        print("list of files inside the given directory")    
-                    else:
-                        if args.VERBOSE:
-                            print("directory does not exist")
-                        response = formatResponse(404, error="Directory does not exist")     
+                        print("list of files inside the given directory")       
                 elif os.path.isdir(args.DIRECTORY):
                     pathToFile = args.DIRECTORY + fileName
                     if os.path.isfile(pathToFile):
@@ -83,6 +80,11 @@ def handle_client(conn, addr):
                         if args.VERBOSE:
                             print("File does not exist in directory")
                         response = formatResponse(404, error="File does not exist in given directory")
+                else:
+                    print(args.DIRECTORY)
+                    if args.VERBOSE:
+                        print("directory does not exist or could not be accessed")
+                    response = formatResponse(404, error="Directory does not exist")  
             elif method == "POST":
                 if body is None:
                     if args.VERBOSE:
@@ -101,13 +103,10 @@ def handle_client(conn, addr):
             conn.sendall(response.encode())
             print(response)
             conn.close()
-            print("hihi")
-            #responses not appearing in client
     finally:
-        print("here")
         conn.close()
 
-def attempt1():
+def connection():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
@@ -124,21 +123,4 @@ def attempt1():
 
 parser = argParser.argumentParser()
 args = parser.parse_args()
-attempt1()
-# print(''.join(['HTTP/1.1 ', "404", ' ', "not found", '\r\n',
-                    # 'Date: ', datetime.now().strftime("%Y-%m-%d %I:%M:%S %p"), '\r\n',
-                    # 'Content-Type: text/html; charset=utf-8\r\n',
-                    # 'Content-Length: ', str(len("error")), '\r\n\r\n',
-                    # "error"]))
-# b'GET /file.txt HTTP/1.1\r\nHost: localhost:8080\r\nUser-Agent: curl/7.55.1\r\nAccept: */*\r\nReferer: t\r\n\r\n'
-# b'POST /afile3.txt HTTP/1.1\r\nHost: localhost:8080\r\nUser-Agent: curl/7.55.1\r\nAccept: */*\r\nContent-Type:application/text\r\nContent-Length: 25\r\n\r\nwriting this data to file'
-# print(formatRequest('GET / HTTP/1.1\r\nHost: localhost:8080\r\nUser-Agent: curl/7.55.1\r\nAccept: */*\r\nReferer: t\r\n\r\n'))
-#Parser
-
-# print(args.PORT)
-# formatRequest('POST /afile3.txt HTTP/1.1\r\nHost: localhost:8080\r\nUser-Agent: curl/7.55.1\r\nAccept: */*\r\nContent-Type:application/text\r\nContent-Length: 25\r\n\r\nwriting this data to file')
-
-
-
-# print(sys.argv)
-# print(args.VERBOSE, args.PORT, args.DIRECTORY)
+connection()
