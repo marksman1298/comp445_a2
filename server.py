@@ -1,11 +1,10 @@
 import socket, sys, os, threading, re, argParser
+from datetime import datetime
 
 
 # def formatRequest(data:str)
 # b'GET / HTTP/1.1\r\nHost: localhost:8080\r\nUser-Agent: curl/7.55.1\r\nAccept: */*\r\nReferer: t\r\n\r\n'
 def formatRequest(data: str):
-    # data = data.decode('utf-8')
-    # dataGroups = data.split('\r\n\r\n')
     dataGroups = re.search("(\w+)\s(\/\w*[\/\w]*(\.\w+\/?)*)", data) 
     acceptedExtenstions = re.search('(Accept:)\s(\W+)(\\r\\n)', data)
     methodType = dataGroups.group(1)
@@ -13,23 +12,17 @@ def formatRequest(data: str):
     fileExtension = acceptedExtenstions.group(2)
     return (methodType, fileName, fileExtension)
     
-    #new function formatBody
 def formatBody(data: str):
     body = data.split('\r\n\r\n')
     if len(body) > 1:
         return (re.sub('\r\n', '', body[1]))
     return None
 
-def getAllFiles(path: str, extension = None) -> str:
+def getAllFiles(path: str) -> str:
     if os.path.isdir(path):
-        response = ''
-        if extension:
-            for files in os.listdir(path):
-                if files.endswith(extension):
-                    response += files + '\r\n'
-        else:
-            for files in os.listdir(path):
-                response += files + '\r\n'
+        response = ''       
+        for files in os.listdir(path):
+            response += files + '\r\n'
         return response            
     else:
         response = 'HTTP/1.1 404 error \r\n the desired directory does not exist.'
@@ -53,20 +46,15 @@ def handle_client(conn, addr):
         if args.VERBOSE:
             print("------------------------------------------------------------------------------------------------")
             print(f"method: {method}, fileName: {fileName}, fileExtenstion: {fileExtenstion}, body: {body}, path: {args.DIRECTORY}")
-        response = "hi"
+        # response = "hi"
         try:
             if method == 'GET':
                 if args.VERBOSE:
                     print("GET request")
-                if fileName == '/':
-                    if fileExtenstion != '*/*':
-                        response = getAllFiles(args.DIRECTORY, fileExtenstion)
-                        if args.VERBOSE:
-                            print("list of files that have the same file extensions as specified inside the given directory")
-                    elif os.path.isdir(args.DIRECTORY):
-                        response = getAllFiles(args.DIRECTORY)        
-                        if args.VERBOSE:
-                            print("list of files inside the given directory")    
+                if fileName == '/' and os.path.isdir(args.DIRECTORY): 
+                    response = getAllFiles(args.DIRECTORY)        
+                    if args.VERBOSE:
+                        print("list of files inside the given directory")    
                     else:
                         if args.VERBOSE:
                             print("directory does not exist")
@@ -81,7 +69,11 @@ def handle_client(conn, addr):
                     else:
                         if args.VERBOSE:
                             print("File does not exist in directory")
-                        response = "HTTP/1.1 404 error \r\n File does not exist in directory."        
+                        # response = "HTTP/1.1 404 error \r\n File does not exist in directory."   
+                        response = ''.join(['HTTP/1.1 ', "404", ' ', "not found", '\r\n', 
+                        'Date: ', datetime.now().strftime("%Y-%m-%d %I:%M:%S %p"), '\r\n',
+                        'Content-Type: text/html; charset=utf-8\r\n','Content-Length: ', 
+                        str(len("error")), '\r\n\r\n',"hello"])     #create method to format request
             elif method == "POST":
                 if body is None:
                     if args.VERBOSE:
@@ -99,8 +91,11 @@ def handle_client(conn, addr):
         finally:
             conn.sendall(response.encode())
             print(response)
+            conn.close()
+            print("hihi")
             #responses not appearing in client
     finally:
+        print("here")
         conn.close()
 
 def attempt1():
@@ -121,6 +116,11 @@ def attempt1():
 parser = argParser.argumentParser()
 args = parser.parse_args()
 attempt1()
+# print(''.join(['HTTP/1.1 ', "404", ' ', "not found", '\r\n',
+                    # 'Date: ', datetime.now().strftime("%Y-%m-%d %I:%M:%S %p"), '\r\n',
+                    # 'Content-Type: text/html; charset=utf-8\r\n',
+                    # 'Content-Length: ', str(len("error")), '\r\n\r\n',
+                    # "error"]))
 # b'GET /file.txt HTTP/1.1\r\nHost: localhost:8080\r\nUser-Agent: curl/7.55.1\r\nAccept: */*\r\nReferer: t\r\n\r\n'
 # b'POST /afile3.txt HTTP/1.1\r\nHost: localhost:8080\r\nUser-Agent: curl/7.55.1\r\nAccept: */*\r\nContent-Type:application/text\r\nContent-Length: 25\r\n\r\nwriting this data to file'
 # print(formatRequest('GET / HTTP/1.1\r\nHost: localhost:8080\r\nUser-Agent: curl/7.55.1\r\nAccept: */*\r\nReferer: t\r\n\r\n'))
