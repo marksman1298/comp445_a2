@@ -9,14 +9,17 @@ def formatResponse(status: int, error = None, data =None)->str:
         Content-Type: text/html; charset=utf-8 \r\n
         Content-Length: {str(len(error.encode("utf-8")))} \r\n\r\n
         {error}"""
-    elif data:
+    elif data is not None:
         return f"""HTTP/1.1 {str(status)} OK \r\n 
         Date: {datetime.now().strftime('%Y/%m/%d %H:%M:%S')} \r\n 
         Content-Type: text/html; charset=utf-8 \r\n
         Content-Length: {str(len(data.encode("utf-8")))} \r\n\r\n
         {data}"""
     else:
-        return "how?"
+        return f"""HTTP/1.1 500 Internal Server Error \r\n 
+        Date: {datetime.now().strftime('%Y/%m/%d %H:%M:%S')} \r\n 
+        Content-Type: text/html; charset=utf-8 \r\n
+        Content-Length: 0 \r\n\r\n"""
 
 def formatRequest(data: str):
     dataGroups = re.search("(\w+)\s(\/\w*[\/\w]*(\.\w+\/?)*)", data) 
@@ -41,6 +44,12 @@ def getAllFiles(path: str) -> str:
     else:
         return formatResponse(404, error="The desired directory does not exist") 
 
+def securityThreat(clientPath: str) -> bool:
+    if clientPath.count("/") > 1:
+        return True
+    else:
+        return False
+
 def handle_client(conn, addr):
     print ('New client from', addr)
     try:
@@ -52,6 +61,7 @@ def handle_client(conn, addr):
             # conn.sendall(data)
         data = dataBytes.decode('utf-8')
         method, fileName, fileExtenstion = formatRequest(data)
+        print(fileName)
         # default is directory containing this file
         # ensures that the files accessed are inside the directory
         # 
@@ -60,6 +70,7 @@ def handle_client(conn, addr):
             print("------------------------------------------------------------------------------------------------")
             print(f"method: {method}, fileName: {fileName}, fileExtenstion: {fileExtenstion}, body: {body}, path: {args.DIRECTORY}")
         try:
+            print(method)
             response = ''
             if method == 'GET':
                 if args.VERBOSE:
@@ -72,33 +83,45 @@ def handle_client(conn, addr):
                 elif os.path.isdir(args.DIRECTORY):
                     pathToFile = args.DIRECTORY + fileName
                     if os.path.isfile(pathToFile):
+                        if securityThreat(pathToFile):
+                            response = formatResponse(403, error="Forbidden, attempting to read contents of file outside given directory")
+                        else:
+                            if args.VERBOSE:
+                                print("output contents of the requested file")
+                            with open(pathToFile, 'r') as f:
+                                response = formatResponse(200, data=f.read())
+                    elif os.path.isdir(pathToFile):
                         if args.VERBOSE:
-                            print("output contents of the requested file")
-                        with open(pathToFile, 'r') as f:
-                            response = formatResponse(200, data=f.read())
+                            print(f"Attempting to list all files inside {pathToFile}")
+                        response = formatResponse(403, error="Forbidden, attempting to read files outside of given directory")
                     else:
                         if args.VERBOSE:
-                            print("File does not exist in directory")
-                        response = formatResponse(404, error="File does not exist in given directory")
+                            print("Path does not exist")
+                        response = formatResponse(404, error="Path not found")
                 else:
                     print(args.DIRECTORY)
                     if args.VERBOSE:
-                        print("directory does not exist or could not be accessed")
+                        print("directory does not exist")
                     response = formatResponse(404, error="Directory does not exist")  
             elif method == "POST":
-                if body is None:
-                    if args.VERBOSE:
-                        print("body is empty, request failed")
-                    response = formatResponse(400, error="Body of request is empty")
-                elif os.path.isdir(args.DIRECTORY): #not writing outside directory where code is
-                    pathToWrite = args.DIRECTORY + fileName
-                    with open(pathToWrite, 'w') as f:
-                        f.write(body)
-                    if args.VERBOSE:
-                        print(f"write contents of body to {pathToWrite}")
-                    response = formatResponse(200, data=body)
+                
+                if os.path.isdir(args.DIRECTORY): 
+                    if securityThreat(fileName):
+                        response = formatResponse(403, error="Forbidden: attempted to write a file outside the given directory")
+                        if args.VERBOSE:
+                            print(f"Attempted to write outside given directory")
+                    else:
+                        pathToWrite = args.DIRECTORY + fileName
+                        with open(pathToWrite, 'w') as f:
+                            f.write(body)
+                        if args.VERBOSE:
+                            print(f"write contents of body to {pathToWrite}")
+                        response = formatResponse(200, data=body)
+                   
                 else:
-                    response = formatResponse(403, error="Attempted to write outside given directory")
+                    if args.VERBOSE:
+                        print("directory does not exist")
+                    response = formatResponse(404, error="Directory does not exist")
         finally:
             conn.sendall(response.encode())
             print(response)
