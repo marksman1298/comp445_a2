@@ -1,5 +1,5 @@
 import socket,threading, argParser
-from applicationLayer import application 
+from applicationLayer import handle_client 
 
 def connection(port, verbose, directory):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -11,7 +11,7 @@ def connection(port, verbose, directory):
         while True:
             clientSocket, address = sock.accept()
             print(f"Connection from {clientSocket} {address} has been established.")
-            threading.Thread(target=application, args=(clientSocket, address, verbose, directory)).start()
+            threading.Thread(target=handle_client, args=(clientSocket, address, verbose, directory)).start()
     finally:
         clientSocket.close()
 

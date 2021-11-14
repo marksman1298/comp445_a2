@@ -3,15 +3,10 @@ from applicationHelper import *
 
 
 
-def application(conn, address, verbose, directory):
+def handle_client(conn, address, verbose, directory):
     print ('New client from', address)
     try:
-        # while True:
         dataBytes = conn.recv(1024) #what if bigger than 1024
-            # if not data:
-            #     break
-            # print(data)
-            # conn.sendall(data)
         data = dataBytes.decode('utf-8')
         method, fileName, fileExtenstion = formatRequest(data)
         print(fileName)
@@ -23,7 +18,7 @@ def application(conn, address, verbose, directory):
             print("------------------------------------------------------------------------------------------------")
             print(f"method: {method}, fileName: {fileName}, fileExtenstion: {fileExtenstion}, body: {body}, path: {directory}")
         try:
-            print(method)
+            # print(method)
             response = ''
             if method == 'GET':
                 if verbose:
@@ -33,36 +28,26 @@ def application(conn, address, verbose, directory):
                     response = getAllFiles(directory)        
                     if verbose:
                         print("list of files inside the given directory")       
-                elif os.path.isdir(directory):
-                    pathToFile = directory + fileName
-                    if os.path.isfile(pathToFile):
-                        if securityThreat(pathToFile):
-                            response = formatResponse(403, error="Forbidden, attempting to read contents of file outside given directory")
-                        else:
-                            if verbose:
-                                print("output contents of the requested file")
-                            with open(pathToFile, 'r') as f:
-                                response = formatResponse(200, data=f.read())
-                    elif os.path.isdir(pathToFile):
-                        if verbose:
-                            print(f"Attempting to list all files inside {pathToFile}")
-                        response = formatResponse(403, error="Forbidden, attempting to read files outside of given directory")
-                    else:
-                        if verbose:
-                            print("Path does not exist")
-                        response = formatResponse(404, error="Path not found")
-                else:
-                    print(directory)
+                elif securityThreat(fileName) or os.path.isdir(directory + fileName):
+                    response = formatResponse(401, error="Unauthorized, attempting to read files outside of given directory")
                     if verbose:
-                        print("directory does not exist")
-                    response = formatResponse(404, error="Directory does not exist")  
-            elif method == "POST":
-                
+                        print("Attempted to read outside of given directory")
+                elif os.path.isfile(directory+fileName):
+                    pathToFile = directory + fileName
+                    if verbose:
+                        print("output contents of the requested file")
+                    with open(pathToFile, 'r') as f:
+                        response = formatResponse(200, data=f.read())    
+                else:
+                    if verbose:
+                        print("Path does not exist")
+                    response = formatResponse(404, error="Path not found") 
+            elif method == "POST": 
                 if os.path.isdir(directory): 
                     if securityThreat(fileName):
-                        response = formatResponse(403, error="Forbidden: attempted to write a file outside the given directory")
+                        response = formatResponse(401, error="Unauthorized: attempted to write a file outside the given directory")
                         if verbose:
-                            print(f"Attempted to write outside given directory")
+                            print("Attempted to write outside given directory")
                     else:
                         pathToWrite = directory + fileName
                         with open(pathToWrite, 'w') as f:
@@ -70,7 +55,6 @@ def application(conn, address, verbose, directory):
                         if verbose:
                             print(f"write contents of body to {pathToWrite}")
                         response = formatResponse(200, data=body)
-                   
                 else:
                     if verbose:
                         print("directory does not exist")
